@@ -1,0 +1,9 @@
+.idea
+go.mod
+go.sum
+vendor/
+
+*.test
+
+*.out
+
