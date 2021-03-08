@@ -196,7 +196,7 @@ func (r *RPCServer) processPacket(packet *protocol.Packet, conn gnet.Conn) {
 			p := protocol.NewPacket(internal.NotSupport, nil, nil)
 			p.PacketId = packet.PacketId
 			p.MarkResponseType()
-			p.Remark = fmt.Sprintf("there is no process func registered with code: %d", packet.Code)
+			p.Message = fmt.Sprintf("there is no process func registered with code: %d", packet.Code)
 			data, err := protocol.Encode(p)
 			if err != nil {
 				r.logger.Errorf("encode response packet error, err: %v", err)

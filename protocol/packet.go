@@ -22,17 +22,17 @@ type (
 )
 
 type Packet struct {
-	Code      int16             `json:"code"`
-	Language  LanguageCode      `json:"language"`
-	Version   int16             `json:"version"`
-	PacketId  int32             `json:"packetId"`
-	Flag      int32             `json:"flag"`
-	Remark    string            `json:"remark"`
-	ExtFields map[string]string `json:"extFields"`
-	Body      []byte            `json:"-"`
+	Code     int16             `json:"code"`
+	Language LanguageCode      `json:"language"`
+	Version  int16             `json:"version"`
+	PacketId int32             `json:"packetId"`
+	Flag     int32             `json:"flag"`
+	Message  string            `json:"message"`
+	ExtData  map[string]string `json:"extData"`
+	Body     []byte            `json:"-"`
 }
 
-func NewPacket(code int16, body []byte, header CustomField) *Packet {
+func NewPacket(code int16, body []byte, header ExtData) *Packet {
 	p := &Packet{
 		Code:     code,
 		Language: Golang,
@@ -42,13 +42,13 @@ func NewPacket(code int16, body []byte, header CustomField) *Packet {
 	}
 
 	if header != nil {
-		p.ExtFields = header.EncodeToMap()
+		p.ExtData = header.EncodeToMap()
 	}
 
 	return p
 }
 
-type CustomField interface {
+type ExtData interface {
 	EncodeToMap() map[string]string
 }
 
@@ -130,11 +130,17 @@ func Encode(packet *Packet) ([]byte, error) {
 		return nil, err
 	}
 
-	frameSize := len(header) + len(packet.Body)
+	frameSize := len(header) + len(packet.Body) + 4 + 1
 	buf := bytes.NewBuffer(make([]byte, frameSize))
 	buf.Reset()
 
-	err = binary.Write(buf, binary.BigEndian, MarkProtocolType(int32(len(header))))
+	err = binary.Write(buf, binary.BigEndian, codecType)
+	if err != nil {
+		return nil, err
+	}
+
+	headerLength := int32(len(header))
+	err = binary.Write(buf, binary.BigEndian, headerLength)
 	if err != nil {
 		return nil, err
 	}
@@ -155,13 +161,18 @@ func Encode(packet *Packet) ([]byte, error) {
 func Decode(data []byte) (*Packet, error) {
 	buf := bytes.NewBuffer(data)
 	length := int32(len(data))
-	var oriHeaderLen int32
-	err := binary.Read(buf, binary.BigEndian, &oriHeaderLen)
+	var headerLength int32
+	var codecTypeByte byte
+	err := binary.Read(buf, binary.BigEndian, &codecTypeByte)
 	if err != nil {
 		return nil, err
 	}
 
-	headerLength := oriHeaderLen & 0xFFFFFF
+	err = binary.Read(buf, binary.BigEndian, &headerLength)
+	if err != nil {
+		return nil, err
+	}
+
 	headerData := make([]byte, headerLength)
 	err = binary.Read(buf, binary.BigEndian, &headerData)
 	if err != nil {
@@ -169,19 +180,19 @@ func Decode(data []byte) (*Packet, error) {
 	}
 
 	var packet *Packet
-	switch codeType := byte((oriHeaderLen >> 24) & 0xFF); codeType {
+	switch codecTypeByte{
 	case Json:
 		packet, err = JSON.UnMarshal(headerData)
 	case Thunder:
 		packet, err = THUNDER.UnMarshal(headerData)
 	default:
-		err = fmt.Errorf("unknown codec type: %d", codeType)
+		err = fmt.Errorf("unknown codec type: %d", codecTypeByte)
 	}
 	if err != nil {
 		return nil, err
 	}
 
-	bodyLength := length - 4 - headerLength
+	bodyLength := length - 4 - 1 - headerLength
 	if bodyLength > 0 {
 		bodyData := make([]byte, bodyLength)
 		err = binary.Read(buf, binary.BigEndian, &bodyData)

@@ -21,58 +21,59 @@ type ThunderSerializer struct {
 }
 
 func (t *ThunderSerializer) Marshal(p *Packet) ([]byte, error) {
-	extBytes, err := t.encodeMaps(p.ExtFields)
+	extBytes, err := t.encodeMaps(p.ExtData)
 	if err != nil {
 		return nil, err
 	}
 
-	buf := bytes.NewBuffer(make([]byte, headerFixedLength+len(p.Remark)+len(extBytes)))
+	buf := bytes.NewBuffer(make([]byte, headerFixedLength+len(p.Message)+len(extBytes)))
 	buf.Reset()
 
-	// request code, length is 2 bytes
+	// Packet.Code, 4 bytes
 	err = binary.Write(buf, binary.BigEndian, int16(p.Code))
 	if err != nil {
 		return nil, err
 	}
 
-	// language flag, length is 1 byte
+	// Packet.Language, 1 byte
 	err = binary.Write(buf, binary.BigEndian, Golang)
 	if err != nil {
 		return nil, err
 	}
 
-	// version flag, length is 2 bytes
+	// Packet.Version, 2 bytes
 	err = binary.Write(buf, binary.BigEndian, int16(p.Version))
 	if err != nil {
 		return nil, err
 	}
 
-	// opaque flag, opaque is request identifier, length is 4 bytes
+	// Packet.PacketId, 4 bytes
 	err = binary.Write(buf, binary.BigEndian, p.PacketId)
 	if err != nil {
 		return nil, err
 	}
 
-	// request flag, length is 4 bytes
+	// Packet.Flag,4 bytes
 	err = binary.Write(buf, binary.BigEndian, p.Flag)
 	if err != nil {
 		return nil, err
 	}
 
-	// remark length flag, length is 4 bytes
-	err = binary.Write(buf, binary.BigEndian, int32(len(p.Remark)))
+	// Packet.Message, 4 bytes
+	err = binary.Write(buf, binary.BigEndian, int32(len(p.Message)))
 	if err != nil {
 		return nil, err
 	}
 
-	// write remark, len(command.Remark) bytes
-	if len(p.Remark) > 0 {
-		err = binary.Write(buf, binary.BigEndian, []byte(p.Remark))
+	// Packet.Message, len(command.Message) bytes
+	if len(p.Message) > 0 {
+		err = binary.Write(buf, binary.BigEndian, []byte(p.Message))
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	// Packet.ExtData
 	err = binary.Write(buf, binary.BigEndian, int32(len(extBytes)))
 	if err != nil {
 		return nil, err
@@ -141,7 +142,7 @@ func (t *ThunderSerializer) UnMarshal(data []byte) (*Packet, error) {
 		if err != nil {
 			return nil, err
 		}
-		packet.Remark = string(remarkData)
+		packet.Message = string(remarkData)
 	}
 
 	err = binary.Read(buf, binary.BigEndian, &extFieldsLen)
@@ -156,7 +157,7 @@ func (t *ThunderSerializer) UnMarshal(data []byte) (*Packet, error) {
 			return nil, err
 		}
 
-		packet.ExtFields = make(map[string]string)
+		packet.ExtData = make(map[string]string)
 		buf := bytes.NewBuffer(extFieldsData)
 		var (
 			kLen int16
@@ -182,7 +183,7 @@ func (t *ThunderSerializer) UnMarshal(data []byte) (*Packet, error) {
 			if err != nil {
 				return nil, err
 			}
-			packet.ExtFields[key] = value
+			packet.ExtData[key] = value
 		}
 	}
 
